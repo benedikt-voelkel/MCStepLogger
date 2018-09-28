@@ -26,7 +26,6 @@
 #pragma link C++ class o2::StepLookups+;
 #pragma link C++ class o2::mcstepanalysis::MCAnalysis + ;
 #pragma link C++ class o2::mcstepanalysis::BasicMCAnalysis + ;
-#pragma link C++ class o2::mcstepanalysis::MCStepLoggerMetaInfo + ;
 #pragma link C++ class o2::mcstepanalysis::MCAnalysisMetaInfo + ;
 #pragma link C++ class o2::mcstepanalysis::MCAnalysisManager + ;
 #pragma link C++ class o2::mcstepanalysis::MCAnalysisFileWrapper + ;

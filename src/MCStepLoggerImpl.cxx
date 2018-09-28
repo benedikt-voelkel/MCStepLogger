@@ -23,8 +23,10 @@
 #include <TTree.h>
 #include <TVirtualMC.h>
 #include <TVirtualMCApplication.h>
+#include <TVirtualMCMultiApplication.h>
 #include <TVirtualMagField.h>
 #include <sstream>
+#include <TVirtualMCStack.h>
 
 #include <dlfcn.h>
 #include <cstdlib>
@@ -374,6 +376,12 @@ extern "C" void dispatchOriginal(TVirtualMCApplication* app, char const* libname
   typedef void (TVirtualMCApplication::*StepMethodType)();
   dispatchOriginalKernel<TVirtualMCApplication, StepMethodType>(app, libname, origFunctionName);
 }
+// Make it also working for TVirtualMCMultiApplication
+extern "C" void dispatchOriginalMulti(TVirtualMCMultiApplication* app, char const* libname, char const* origFunctionName)
+{
+  typedef void (TVirtualMCMultiApplication::*StepMethodType)();
+  dispatchOriginalKernel<TVirtualMCMultiApplication, StepMethodType>(app, libname, origFunctionName);
+}
 
 // a generic function that can dispatch to the original method of a TVirtualMagField
 extern "C" void dispatchOriginalField(TVirtualMagField* field, char const* libname, char const* origFunctionName,
@@ -383,9 +391,11 @@ extern "C" void dispatchOriginalField(TVirtualMagField* field, char const* libna
   dispatchOriginalKernel<TVirtualMagField, MethodType>(field, libname, origFunctionName, x, B);
 }
 
-extern "C" void performLogging(TVirtualMCApplication* app)
+//extern "C" void performLogging(TVirtualMCApplication* app)
+extern "C" void performLogging()
 {
-  static TVirtualMC* mc = TVirtualMC::GetMC();
+  // /printf("Just something else");
+  TVirtualMC* mc = TVirtualMC::GetMC();
   o2::logger->addStep(mc);
 }
 
@@ -397,6 +407,7 @@ extern "C" void logField(double const* p, double const* b)
 
 extern "C" void initLogger()
 {
+  printf("Init\n");
   // init TFile for logging output
   o2::initTFile();
   // initializes the logging instances

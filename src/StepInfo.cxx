@@ -13,18 +13,20 @@
 //  @since  2017-06-29
 //  @brief  structures encapsulating information about MC stepping
 
-#include "MCStepLogger/StepInfo.h"
-#include <TArrayI.h>
-#include <TParticle.h>
-#include <TVirtualMC.h>
+#include <cassert>
+#include <iostream>
 #include <chrono>
 
+#include "MCStepLogger/StepInfo.h"
+
+#include <TArrayI.h>
+#include <TVirtualMC.h>
 #include <TDatabasePDG.h>
 #include <TGeoManager.h>
 #include <TGeoMedium.h>
 #include <TGeoVolume.h>
-#include <cassert>
-#include <iostream>
+#include <TVirtualMCStack.h>
+#include <TParticle.h>
 
 ClassImp(o2::StepInfo);
 ClassImp(o2::MagCallInfo);
@@ -35,7 +37,7 @@ namespace o2
 StepInfo::StepInfo(TVirtualMC* mc)
 {
   assert(mc);
-
+  std::cout << "Step info conctructor: " << mc << std::endl;
   // init base time point
   if (stepcounter == -1) {
     starttime = std::chrono::high_resolution_clock::now();
@@ -44,12 +46,14 @@ StepInfo::StepInfo(TVirtualMC* mc)
   stepid = stepcounter;
 
   auto stack = mc->GetStack();
+  assert(stack);
 
   trackID = stack->GetCurrentTrackNumber();
   lookupstructures.insertPDG(trackID, mc->TrackPid());
 
   auto id = mc->CurrentVolID(copyNo);
   volId = id;
+
 
   auto curtrack = stack->GetCurrentTrack();
   auto parentID = curtrack->IsPrimary() ? -1 : stack->GetCurrentParentTrackNumber();
@@ -70,14 +74,16 @@ StepInfo::StepInfo(TVirtualMC* mc)
     }
   }
 
-  double xd, yd, zd;
-  mc->TrackPosition(xd, yd, zd);
+  double xd, yd, zd, t;
+  mc->TrackPosition(xd, yd, zd, t);
   x = xd;
   y = yd;
   z = zd;
   step = mc->TrackStep();
   maxstep = mc->MaxStep();
-  E = curtrack->Energy();
+  // \note That is only valid if the energy is updated otherwise this is the initial energy of the track when it was pushed to the VMC stack
+  //E = curtrack->Energy();
+  E = mc->Etot();
   auto now = std::chrono::high_resolution_clock::now();
   // cputimestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(now - starttime).count();
   nsecondaries = mc->NSecondaries();
