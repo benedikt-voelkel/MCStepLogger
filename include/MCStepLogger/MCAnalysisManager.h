@@ -30,14 +30,16 @@
 
 #include "MCStepLogger/StepInfo.h"
 #include "MCStepLogger/MetaInfo.h"
+#include "MCStepLogger/MCAnalysisFileWrapper.h"
 
 namespace o2
 {
 namespace mcstepanalysis
 {
 
+enum class EMode {kNone, kFromFile, kOnTheFly};
+
 class MCAnalysis;
-class MCAnalysisFileWrapper;
 
 class MCAnalysisManager
 {
@@ -55,6 +57,12 @@ class MCAnalysisManager
   bool checkReadiness() const;
   /// run tha chain depending on the mode
   void run(int nEvents = -1);
+  /// Run analysis on the fly with containers passed as arguments
+  bool analyze(std::vector<o2::StepInfo>* stepInfo,
+               std::vector<o2::MagCallInfo>* magCallInfo,
+               o2::StepLookups* lookups);
+  /// finalize all analyses
+  void finalize();
   /// do a dryrun just to see what's in the MCStepLogger ROOT file
   bool dryrun();
   /// write produced analysis data to disk
@@ -104,13 +112,13 @@ class MCAnalysisManager
   // running the machinery
   //
   /// initialize AnalysisManager and registered analyses
-  void initialize();
+  void initialize(EMode mode);
   /// analyse events and forward vectors of step and magnetic field info to single analyses
   bool analyze(int nEvents = -1, bool isDryrun = false);
-  /// finalize all analyses
-  void finalize();
 
  private:
+   /// analysis mode, default is none and the mode will be set during initialize()
+   EMode mMode = EMode::kNone;
   /// holding the pointers to registered analyses
   std::vector<MCAnalysis*> mAnalyses;
   /// collect pointers which will be safely deleted which happens e.g. when the same analysis is registered twice
@@ -118,6 +126,7 @@ class MCAnalysisManager
   /// keep track of status of MCAnalysisManager
   bool mIsInitialized = false;
   bool mIsAnalyzed = false;
+  bool mIsFinalized = false;
   /// the input file the analysis is conducted on
   std::string mInputFilepath = "";
   /// treename of step log data
@@ -139,6 +148,7 @@ class MCAnalysisManager
   std::vector<MCAnalysisFileWrapper> mAnalysisFiles;
   /// A JSON file to overwrite histogram properties used in MCAnalysis objects
   //std::string mHistogramPropertiesJSON = "";
+
 
   ClassDefNV(MCAnalysisManager, 1);
 };

@@ -15,6 +15,8 @@
 
 #include "MCStepLogger/StepInfo.h"
 #include "MCStepLogger/MetaInfo.h"
+#include "MCStepLogger/MCAnalysisManager.h"
+#include "MCStepLogger/BasicMCAnalysis.h"
 #include <TBranch.h>
 #include <TClonesArray.h>
 #include <TFile.h>
@@ -42,6 +44,10 @@
 
 namespace o2
 {
+  // What to do by the logging?
+  // Flush to TTree, do analysis per event or print to screen
+  enum class ELogMode {kCollect, kPrint};
+
 const char* getLogFileName()
 {
   if (const char* f = std::getenv("MCSTEPLOG_OUTFILE")) {
@@ -135,22 +141,31 @@ class FieldLogger
   int counter = 0;
   std::map<int, int> volumetosteps;
   std::map<int, std::string> idtovolname;
-  bool mTTreeIO = false;
+  ELogMode logMode;
   std::vector<MagCallInfo> callcontainer;
 
  public:
   FieldLogger()
   {
-    // check if streaming or interactive
-    // configuration done via env variable
-    if (std::getenv("MCSTEPLOG_TTREE")) {
-      mTTreeIO = true;
-    }
+    // print by default
+    logMode = ELogMode::kPrint;
+  }
+
+  // Get the flush mode
+  void setLogMode(ELogMode mode)
+  {
+    logMode = mode;
+  }
+
+  // Get pointer to step info vector
+  std::vector<MagCallInfo>* getContainer()
+  {
+    return &callcontainer;
   }
 
   void addStep(TVirtualMC* mc, const double* x, const double* b)
   {
-    if (mTTreeIO) {
+    if (logMode == ELogMode::kCollect) {
       callcontainer.emplace_back(mc, x[0], x[1], x[2], b[0], b[1], b[2]);
       return;
     }
@@ -172,16 +187,15 @@ class FieldLogger
     counter = 0;
     volumetosteps.clear();
     idtovolname.clear();
-    if (mTTreeIO) {
+    if (logMode == ELogMode::kCollect) {
       callcontainer.clear();
     }
   }
 
   void flush()
   {
-    if (mTTreeIO) {
-      flushToTTree("Calls", &callcontainer);
-    } else {
+    if (logMode == ELogMode::kPrint) {
+      std::cerr << "[FIELDLOGGER]: ----- Print mag calls logs -----\n";
       std::cerr << "[FIELDLOGGER]: did " << counter << " steps \n";
       // summarize steps per volume
       for (auto& p : volumetosteps) {
@@ -189,8 +203,9 @@ class FieldLogger
         std::cerr << "\n";
       }
       std::cerr << "[FIELDLOGGER]: ----- END OF EVENT ------\n";
+    } else {
+      flushToTTree("Calls", &callcontainer);
     }
-    clear();
   }
 };
 
@@ -204,25 +219,41 @@ class StepLogger
   std::map<int, std::string> idtovolname;
   std::map<int, int> volumetoNSecondaries;            // number of secondaries created in this volume
   std::map<std::pair<int, int>, int> volumetoProcess; // mapping of volumeid x processID to secondaries produced
+  ELogMode logMode;                                 // print to screen, flush to TTree, forward to analysis
 
   std::vector<StepInfo> container;
-  bool mTTreeIO = false;
+
 
  public:
   StepLogger()
   {
-    // check if streaming or interactive
-    // configuration done via env variable
-    if (std::getenv("MCSTEPLOG_TTREE")) {
-      mTTreeIO = true;
-    }
+    // print by default
+    logMode = ELogMode::kPrint;
     // try to load the volumename -> modulename mapping
     initVolumeMap();
   }
 
+  // Get the flush mode
+  void setLogMode(ELogMode mode)
+  {
+    logMode = mode;
+  }
+
+  // Get pointer to step info vector
+  std::vector<StepInfo>* getContainer()
+  {
+    return &container;
+  }
+
+  // Get pointer to lookup vector
+  StepLookups* getLookups() const
+  {
+    return &StepInfo::lookupstructures;
+  }
+
   void addStep(TVirtualMC* mc)
   {
-    if (mTTreeIO) {
+    if (logMode == ELogMode::kCollect) {
       container.emplace_back(mc);
     } else {
       assert(mc);
@@ -269,6 +300,8 @@ class StepLogger
 
   void clear()
   {
+    StepInfo::lookupstructures.tracktoparent.clear();
+    StepInfo::lookupstructures.tracktopdg.clear();
     stepcounter = 0;
     trackset.clear();
     pdgset.clear();
@@ -276,10 +309,9 @@ class StepLogger
     idtovolname.clear();
     volumetoNSecondaries.clear();
     volumetoProcess.clear();
-    if (mTTreeIO) {
+    if (logMode == ELogMode::kCollect) {
       container.clear();
     }
-    StepInfo::resetCounter();
   }
 
   // prints list of processes for volumeID
@@ -294,7 +326,8 @@ class StepLogger
 
   void flush()
   {
-    if (!mTTreeIO) {
+    if (logMode == ELogMode::kPrint) {
+      std::cerr << "[STEPLOGGER]: ----- Print field logs -----\n";
       std::cerr << "[STEPLOGGER]: did " << stepcounter << " steps \n";
       std::cerr << "[STEPLOGGER]: transported " << trackset.size() << " different tracks \n";
       std::cerr << "[STEPLOGGER]: transported " << pdgset.size() << " different types \n";
@@ -310,11 +343,7 @@ class StepLogger
     } else {
       flushToTTree("Steps", &container);
       flushToTTree("Lookups", &StepInfo::lookupstructures);
-      // we need to reset some parts of the lookupstructures for the next event
-      StepInfo::lookupstructures.tracktoparent.clear();
-      StepInfo::lookupstructures.tracktopdg.clear();
     }
-    clear();
   }
 };
 
@@ -322,6 +351,8 @@ class StepLogger
 // pointers to dissallow construction at each library load
 StepLogger* logger;
 FieldLogger* fieldlogger;
+// Current number of processed events
+int nEvent = 0;
 } // end namespace
 
 // a helper template kernel describing generically the redispatching prodecure
@@ -413,12 +444,46 @@ extern "C" void initLogger()
   // initializes the logging instances
   o2::logger = new o2::StepLogger();
   o2::fieldlogger = new o2::FieldLogger();
+  // Check env if analysis should be done on the fly, if yes, load
+  // BasicMCAnalysis
+  if(std::getenv("MCSTEPLOG_ANALYSE")) {
+    printf("Forward log to analysis on the fly\n");
+    new o2::mcstepanalysis::BasicMCAnalysis();
+    o2::logger->setLogMode(o2::ELogMode::kCollect);
+    o2::fieldlogger->setLogMode(o2::ELogMode::kCollect);
+  } else if(std::getenv("MCSTEPLOG_TTREE")) {
+    printf("Log to TTree\n");
+    o2::logger->setLogMode(o2::ELogMode::kCollect);
+    o2::fieldlogger->setLogMode(o2::ELogMode::kCollect);
+  } else {
+    printf("Print log to screen\n");
+    o2::logger->setLogMode(o2::ELogMode::kPrint);
+    o2::fieldlogger->setLogMode(o2::ELogMode::kPrint);
+  }
 }
 
 extern "C" void flushLog()
 {
   std::cerr << "[MCLOGGER:] START FLUSHING ----\n";
-  o2::logger->flush();
-  o2::fieldlogger->flush();
+
+  // Either forward to MCAnalysisManager
+  if(std::getenv("MCSTEPLOG_ANALYSE")) {
+    o2::nEvent++;
+    // forward containers to analysis manager...
+    o2::mcstepanalysis::MCAnalysisManager::Instance().analyze(o2::logger->getContainer(),
+                                                              o2::fieldlogger->getContainer(),
+                                                              o2::logger->getLookups());
+    if(atoi(std::getenv("MCSTEPLOG_ANALYSE")) == o2::nEvent) {
+      o2::mcstepanalysis::MCAnalysisManager::Instance().finalize();
+      o2::mcstepanalysis::MCAnalysisManager::Instance().write("MCAnalysis_Output");
+    }
+  // ...or flush
+  } else {
+    o2::logger->flush();
+    o2::fieldlogger->flush();
+  }
+  // clear loggers
+  o2::logger->clear();
+  o2::fieldlogger->clear();
   std::cerr << "[MCLOGGER:] END FLUSHING ----\n";
 }

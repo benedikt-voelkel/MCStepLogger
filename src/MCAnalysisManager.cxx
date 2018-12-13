@@ -12,7 +12,6 @@
 
 #include "MCStepLogger/MCAnalysisManager.h"
 #include "MCStepLogger/MCAnalysis.h"
-#include "MCStepLogger/MCAnalysisFileWrapper.h"
 #include "MCStepLogger/ROOTIOUtilities.h"
 
 ClassImp(o2::mcstepanalysis::MCAnalysisManager);
@@ -45,6 +44,9 @@ void MCAnalysisManager::registerAnalysis(MCAnalysis* analysis)
 bool MCAnalysisManager::checkReadiness() const
 {
   std::string errorMessage;
+  if(mMode != EMode::kNone) {
+    errorMessage += "Needs to be in mode kNone...\n";
+  }
   if (mInputFilepath.empty()) {
     errorMessage += "Input file required...\n";
   }
@@ -64,7 +66,7 @@ void MCAnalysisManager::run(int nEvents)
     std::cerr << "FATAL: MCAnalysisManager not ready to run, errors occured\n";
     exit(1);
   }
-  initialize();
+  initialize(EMode::kFromFile);
   analyze(nEvents);
   finalize();
 }
@@ -78,12 +80,12 @@ bool MCAnalysisManager::dryrun()
   return analyze(-1, true);
 }
 
-void MCAnalysisManager::initialize()
+void MCAnalysisManager::initialize(EMode mode)
 {
   if (mIsInitialized) {
-    std::cerr << "Already initialized ==> not initialized again...\n";
     return;
   }
+  mMode = mode;
   // get rid of all analyses not needed anymore
   for (auto& a : mAnalysesToDump) {
     delete a;
@@ -102,10 +104,46 @@ void MCAnalysisManager::initialize()
   mIsInitialized = true;
 }
 
+bool MCAnalysisManager::analyze(std::vector<o2::StepInfo>* stepInfo,
+                                std::vector<o2::MagCallInfo>* magCallInfo,
+                                o2::StepLookups* lookups)
+{
+  if(mIsFinalized) {
+    std::cerr << "Already finalized ==> nothing to analyze...\n";
+    return false;
+  }
+  if(mMode == EMode::kNone) {
+    initialize(EMode::kOnTheFly);
+  }
+  if(mMode != EMode::kOnTheFly) {
+    std::cerr << "You are not in kOnTheFly mode...\n";
+    return false;
+  }
+  mCurrentStepInfo = stepInfo;
+  mCurrentMagCallInfo = magCallInfo;
+  mCurrentLookups = lookups;
+  std::cout << "---> Event " << mCurrentEventNumber << " <---\n";
+  std::cout << "#steps: " << mCurrentStepInfo->size() << "\n";
+  std::cout << "#mag field calls: " << mCurrentMagCallInfo->size() << "\n";
+
+  std::cout << "\nStart..." << std::endl;
+  for (auto& a : mAnalyses) {
+    std::cout << "\t\tCall analysis " << a->name() << std::endl;
+    a->analyze(mCurrentStepInfo, mCurrentMagCallInfo);
+  }
+  std::cout << "Done\n";
+  mCurrentEventNumber++;
+  mIsAnalyzed = true;
+}
+
 bool MCAnalysisManager::analyze(int nEvents, bool isDryrun)
 {
   if (!mIsInitialized && !isDryrun) {
     std::cerr << "Not yet initialized ==> nothing to analyze...\n";
+    return false;
+  }
+  if(mIsFinalized) {
+    std::cerr << "Already finalized ==> nothing to analyze...\n";
     return false;
   }
   // taking only the first entry is a hack! \todo change this by enabling also for TChains
@@ -178,6 +216,9 @@ bool MCAnalysisManager::analyze(int nEvents, bool isDryrun)
 
 void MCAnalysisManager::finalize()
 {
+  if(mIsFinalized) {
+    return;
+  }
   if (!mIsAnalyzed) {
     std::cerr << "ERROR: Not yet analyzed ==> nothing to finalize...\n";
     return;
@@ -185,6 +226,7 @@ void MCAnalysisManager::finalize()
   for (auto& a : mAnalyses) {
     a->finalize();
   }
+  mIsFinalized = true;
 }
 
 void MCAnalysisManager::write(const std::string& directory) const
@@ -199,6 +241,7 @@ void MCAnalysisManager::terminate()
   //std::cerr << "Terminate MCAnalysisManager...";
   mIsInitialized = false;
   mIsAnalyzed = false;
+  mIsFinalized = false;
   mCurrentEventNumber = 0;
   mNSteps = 0;
   mCurrentStepInfo = nullptr;
@@ -208,6 +251,7 @@ void MCAnalysisManager::terminate()
   for (auto& a : mAnalyses) {
     a->isInitialized(false);
   }
+  mMode = EMode::kNone;
 }
 
 void MCAnalysisManager::setLabel(const std::string& label)

@@ -103,7 +103,9 @@ void BasicMCAnalysis::analyze(const std::vector<StepInfo>* const steps, const st
   }
 
   // total number of steps in this event
-  int nSteps = 0;
+  int nSteps = histNSteps->GetEntries();
+  int currNSteps = 0;
+  int nTracks = histNTracks->GetEntries();
   // to store particle ID
   int pdgId = 0;
   // get the mean step size per event
@@ -126,7 +128,7 @@ void BasicMCAnalysis::analyze(const std::vector<StepInfo>* const steps, const st
     mAnalysisManager->getLookupPDG(step.trackID, pdgId);
     mAnalysisManager->getLookupVolName(step.volId, volName);
     // first increment the total number of steps over all events
-    nSteps++;
+    currNSteps++;
 
     // avoid double counting of tracks in an event, so check if track ID is already registered
     if (std::find(tracks.begin(), tracks.end(), step.trackID) == tracks.end() && step.trackID > -1) {
@@ -175,16 +177,16 @@ void BasicMCAnalysis::analyze(const std::vector<StepInfo>* const steps, const st
     histNSecondariesPerVolPerEvent->Fill(volName.c_str(), step.nsecondaries);
   }
   // add number of steps
-  histNSteps->Fill(0.5, nSteps);
-  histNSteps->SetEntries(nSteps);
-  histNStepsPerEvent->Fill(0.5, nSteps);
-  histNStepsPerEvent->SetEntries(nSteps);
+  histNSteps->Fill(0.5, currNSteps);
+  histNSteps->SetEntries(nSteps + currNSteps);
+  histNStepsPerEvent->Fill(0.5, currNSteps);
+  histNStepsPerEvent->SetEntries(nSteps + currNSteps);
 
   // add number of tracks
   histNTracks->Fill(0.5, tracks.size());
-  histNTracks->SetEntries(tracks.size());
+  histNTracks->SetEntries(nTracks + tracks.size());
   histNTracksPerEvent->Fill(0.5, tracks.size());
-  histNTracksPerEvent->SetEntries(tracks.size());
+  histNTracksPerEvent->SetEntries(nTracks + tracks.size());
   // update number of steps, number of steps per volume, mean step length and mean step length per volume
   float meanStepSizes = 0.;
   for (int i = 0; i < nStepsPerVol.size(); i++) {
@@ -204,12 +206,12 @@ void BasicMCAnalysis::analyze(const std::vector<StepInfo>* const steps, const st
       volPresent[volName]++;
     }
   }
-  histNStepsPerVolPerEvent->SetEntries(nSteps);
-  histMeanStepSizePerEvent->Fill(0.5, meanStepSizes / float(nSteps));
+  histNStepsPerVolPerEvent->SetEntries(nSteps + currNSteps);
+  histMeanStepSizePerEvent->Fill(0.5, meanStepSizes / float(currNSteps));
   // since the step size is the difference between 2 points in 3D space,
   // the exact number of entries is nSteps-nTracks, however nTracks << nSteps is expected
-  histMeanStepSizePerEvent->SetEntries(nSteps);
-  histMeanStepSizePerVolPerEvent->SetEntries(nSteps);
+  histMeanStepSizePerEvent->SetEntries(nSteps + currNSteps);
+  histMeanStepSizePerVolPerEvent->SetEntries(nSteps + currNSteps);
   // number of steps per PDG ID and mean step length per PDG ID
   for (auto& sp : nStepsPerPDGMap) {
     std::string pdgString(std::to_string(sp.first));
@@ -223,8 +225,8 @@ void BasicMCAnalysis::analyze(const std::vector<StepInfo>* const steps, const st
       pdgPresent[pdgString]++;
     }
   }
-  histNStepsPerPDGPerEvent->SetEntries(nSteps);
-  histMeanStepSizePerPDGPerEvent->SetEntries(nSteps);
+  histNStepsPerPDGPerEvent->SetEntries(nSteps + currNSteps);
+  histMeanStepSizePerPDGPerEvent->SetEntries(nSteps + currNSteps);
 }
 
 void BasicMCAnalysis::finalize()

@@ -48,8 +48,8 @@ namespace helper
 
 DECLARE_INTERCEPT_SYMBOLS(FairMCApplication, Stepping, FinishEvent, ConstructGeometry)
 DECLARE_INTERCEPT_SYMBOLS(AliMC,Stepping, FinishEvent, ConstructGeometry)
-DECLARE_INTERCEPT_SYMBOLS(CEMCSingleApplication, Stepping, FinishEvent, ConstructGeometry)
-DECLARE_INTERCEPT_SYMBOLS(CEMCMultiApplication, SteppingMulti, FinishEventMulti, ConstructGeometryMulti)
+DECLARE_INTERCEPT_SYMBOLS(MEMCSingleApplication, Stepping, FinishEvent, ConstructGeometry)
+DECLARE_INTERCEPT_SYMBOLS(MEMCMultiApplication, SteppingMulti, FinishEventMulti, ConstructGeometryMulti)
 
 
 // same for field
@@ -103,18 +103,18 @@ extern "C" void initLogger();
 // the runtime will now dispatch to these functions due to LD_PRELOAD
 INTERCEPT_STEPPING(FairMCApplication, TVirtualMCApplication, Stepping, "libBase", "_ZN17FairMCApplication8SteppingEv")
 INTERCEPT_STEPPING(AliMC, TVirtualMCApplication, Stepping, "libSTEER", "_ZN5AliMC8SteppingEv")
-INTERCEPT_STEPPING(CEMCSingleApplication, TVirtualMCApplication, Stepping, "libvmc_CE", "_ZN21CEMCSingleApplication8SteppingEv")
-INTERCEPT_STEPPING(CEMCMultiApplication, TVirtualMCMultiApplication, SteppingMulti, "libvmc_CE", "_ZN20CEMCMultiApplication13SteppingMultiEv")
+INTERCEPT_STEPPING(MEMCSingleApplication, TVirtualMCApplication, Stepping, "libvmc_ME", "_ZN21MEMCSingleApplication8SteppingEv")
+INTERCEPT_STEPPING(MEMCMultiApplication, TVirtualMCMultiApplication, SteppingMulti, "libvmc_ME", "_ZN20MEMCMultiApplication13SteppingMultiEv")
 
 INTERCEPT_FINISHEVENT(FairMCApplication, TVirtualMCApplication, FinishEvent, "libBase", "_ZN17FairMCApplication11FinishEventEv")
 INTERCEPT_FINISHEVENT(AliMC, TVirtualMCApplication, FinishEvent, "libSTEER", "_ZN5AliMC11FinishEventEv")
-INTERCEPT_FINISHEVENT(CEMCSingleApplication, TVirtualMCApplication, FinishEvent, "libvmc_CE", "_ZN21CEMCSingleApplication11FinishEventEv")
-INTERCEPT_FINISHEVENT(CEMCMultiApplication, TVirtualMCMultiApplication, FinishEventMulti, "libvmc_CE", "_ZN20CEMCMultiApplication16FinishEventMultiEv")
+INTERCEPT_FINISHEVENT(MEMCSingleApplication, TVirtualMCApplication, FinishEvent, "libvmc_ME", "_ZN21MEMCSingleApplication11FinishEventEv")
+INTERCEPT_FINISHEVENT(MEMCMultiApplication, TVirtualMCMultiApplication, FinishEventMulti, "libvmc_ME", "_ZN20MEMCMultiApplication16FinishEventMultiEv")
 
 INTERCEPT_GEOMETRYINIT(FairMCApplication, TVirtualMCApplication, ConstructGeometry, "libBase", "_ZN17FairMCApplication17ConstructGeometryEv")
 INTERCEPT_GEOMETRYINIT(AliMC, TVirtualMCApplication, ConstructGeometry, "libSTEER", "_ZN5AliMC17ConstructGeometryEv")
-INTERCEPT_GEOMETRYINIT(CEMCSingleApplication, TVirtualMCApplication, ConstructGeometry, "libvmc_CE", "_ZN21CEMCSingleApplication17ConstructGeometryEv")
-INTERCEPT_GEOMETRYINIT(CEMCMultiApplication, TVirtualMCMultiApplication, ConstructGeometryMulti, "libvmc_CE", "_ZN20CEMCMultiApplication21ConstructGeometryMultiEv")
+INTERCEPT_GEOMETRYINIT(MEMCSingleApplication, TVirtualMCApplication, ConstructGeometry, "libvmc_ME", "_ZN21MEMCSingleApplication17ConstructGeometryEv")
+INTERCEPT_GEOMETRYINIT(MEMCMultiApplication, TVirtualMCMultiApplication, ConstructGeometryMulti, "libvmc_ME", "_ZN20MEMCMultiApplication22ConstructGeometryMultiEv")
 
 #define INTERCEPT_FIELD(FIELD, LIB, SYMBOL)                     \
   void FIELD::Field(const double* point, double* bField)        \
